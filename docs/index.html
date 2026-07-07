@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Restock Radar</title>
+<style>
+  :root { color-scheme: light dark; --ok:#1a7f37; --bad:#b35900; --warn:#8250df; --blocked:#cf222e; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.4rem; }
+  input, button { font: inherit; padding: 10px 12px; border-radius: 8px; border: 1px solid #8888; }
+  button { cursor: pointer; background: #2da44e; color: #fff; border: none; }
+  button.secondary { background: none; color: inherit; border: 1px solid #8888; }
+  form { display: grid; gap: 8px; margin-bottom: 20px; }
+  ul { list-style: none; padding: 0; display: grid; gap: 10px; }
+  li { border: 1px solid #8884; border-radius: 10px; padding: 12px; display: grid; gap: 6px; }
+  li.paused { opacity: .55; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .badge { font-size: .8rem; font-weight: 600; padding: 2px 10px; border-radius: 999px; color: #fff; }
+  .IN_STOCK { background: var(--ok); } .OUT_OF_STOCK { background: var(--bad); }
+  .UNKNOWN { background: var(--warn); } .BLOCKED { background: var(--blocked); } .NEW { background: #57606a; }
+  .meta { font-size: .8rem; opacity: .7; }
+  .actions button { font-size: .8rem; padding: 4px 10px; }
+  #msg { min-height: 1.2em; font-size: .9rem; }
+  #msg.error { color: var(--blocked); }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<h1>⌚ Restock Radar</h1>
+
+<section id="setup" hidden>
+  <p>One-time setup: paste a fine-grained GitHub token with <strong>Contents read &amp; write</strong> access to <strong>only</strong> the <code>restock-radar</code> repo. It is stored only in this browser.</p>
+  <form id="tokenForm">
+    <input id="tokenInput" type="password" placeholder="github_pat_…" required>
+    <button>Save token</button>
+  </form>
+</section>
+
+<section id="app" hidden>
+  <form id="addForm">
+    <input id="urlInput" type="url" placeholder="https://store.com/products/that-watch" required>
+    <input id="labelInput" type="text" placeholder="Nickname (optional), e.g. Seiko Alpinist">
+    <button>Add to watchlist</button>
+  </form>
+  <p id="msg"></p>
+  <ul id="list"></ul>
+  <p><button class="secondary" id="changeToken">Change token</button></p>
+</section>
+
+<script>
+const OWNER = 'Jas-02', REPO = 'restock-radar', BRANCH = 'main';
+const FILE_API = `https://api.github.com/repos/${OWNER}/${REPO}/contents/data/watchlist.json`;
+const rawUrl = (f) => `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/data/${f}?t=${Date.now()}`;
+const BADGES = { IN_STOCK: 'In stock', OUT_OF_STOCK: 'Out of stock', UNKNOWN: 'Unknown', BLOCKED: "Can't monitor", NEW: 'Not checked yet' };
+
+const $ = (id) => document.getElementById(id);
+let token = localStorage.getItem('rr_token');
+
+function showScreen() {
+  $('setup').hidden = !!token;
+  $('app').hidden = !token;
+  if (token) refresh();
+}
+
+function msg(text, isError = false) {
+  $('msg').textContent = text;
+  $('msg').className = isError ? 'error' : '';
+}
+
+const ghHeaders = () => ({
+  Authorization: `Bearer ${token}`,
+  Accept: 'application/vnd.github+json',
+  'X-GitHub-Api-Version': '2022-11-28',
+});
+
+async function getWatchlist() {
+  const res = await fetch(`${FILE_API}?ref=${BRANCH}&t=${Date.now()}`, { headers: ghHeaders() });
+  if (res.status === 401) { throw new Error('Token rejected — check it and try again.'); }
+  if (!res.ok) throw new Error(`GitHub API error ${res.status}`);
+  const file = await res.json();
+  const items = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(file.content), (c) => c.charCodeAt(0)))).items;
+  return { items, sha: file.sha };
+}
+
+async function saveWatchlist(items, sha, retried = false) {
+  const body = {
+    message: 'chore: update watchlist via web app [skip ci]',
+    branch: BRANCH,
+    sha,
+    content: btoa(unescape(encodeURIComponent(JSON.stringify({ items }, null, 2) + '\n'))),
+  };
+  const res = await fetch(FILE_API, { method: 'PUT', headers: ghHeaders(), body: JSON.stringify(body) });
+  if (res.status === 409 && !retried) {
+    const fresh = await getWatchlist(); // someone else wrote meanwhile; retry once on fresh sha
+    return saveWatchlist(items, fresh.sha, true);
+  }
+  if (!res.ok) throw new Error(`Save failed (${res.status}). Try again.`);
+}
+
+async function getState() {
+  try {
+    const res = await fetch(rawUrl('state.json'));
+    return res.ok ? await res.json() : {};
+  } catch { return {}; }
+}
+
+function render(items, state) {
+  const list = $('list');
+  list.innerHTML = '';
+  if (!items.length) { list.innerHTML = '<li>No watches yet — paste a product link above.</li>'; return; }
+  for (const item of items) {
+    const s = state[item.id];
+    const status = s?.status ?? 'NEW';
+    const li = document.createElement('li');
+    li.className = item.active ? '' : 'paused';
+    const name = document.createElement('a');
+    name.href = item.url; name.target = '_blank'; name.rel = 'noopener';
+    name.textContent = item.label || new URL(item.url).hostname;
+    const badge = document.createElement('span');
+    badge.className = `badge ${status}`;
+    badge.textContent = item.active ? BADGES[status] : 'Paused';
+    const top = document.createElement('div'); top.className = 'row';
+    top.append(name, badge);
+    const meta = document.createElement('div'); meta.className = 'meta';
+    meta.textContent = [
+      s?.price ? `Price: ${s.price}` : null,
+      s?.lastCheckedAt ? `Checked: ${new Date(s.lastCheckedAt).toLocaleString()}` : null,
+    ].filter(Boolean).join(' · ');
+    const actions = document.createElement('div'); actions.className = 'row actions';
+    const pauseBtn = document.createElement('button');
+    pauseBtn.className = 'secondary';
+    pauseBtn.textContent = item.active ? 'Pause' : 'Resume';
+    pauseBtn.onclick = () => mutate((items) => { items.find((i) => i.id === item.id).active = !item.active; return items; });
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'secondary';
+    removeBtn.textContent = 'Remove';
+    removeBtn.onclick = () => confirm(`Remove ${item.label || item.url}?`) &&
+      mutate((items) => items.filter((i) => i.id !== item.id));
+    actions.append(pauseBtn, removeBtn);
+    li.append(top, meta, actions);
+    list.append(li);
+  }
+}
+
+async function refresh() {
+  try {
+    msg('Loading…');
+    const [{ items }, state] = await Promise.all([getWatchlist(), getState()]);
+    render(items, state);
+    msg('');
+  } catch (err) { msg(err.message, true); }
+}
+
+async function mutate(fn) {
+  try {
+    msg('Saving…');
+    const { items, sha } = await getWatchlist();
+    await saveWatchlist(fn(items), sha);
+    await refresh();
+    msg('Saved ✓');
+  } catch (err) { msg(err.message, true); }
+}
+
+$('tokenForm').onsubmit = (e) => {
+  e.preventDefault();
+  token = $('tokenInput').value.trim();
+  localStorage.setItem('rr_token', token);
+  showScreen();
+};
+
+$('changeToken').onclick = () => {
+  localStorage.removeItem('rr_token');
+  token = null;
+  showScreen();
+};
+
+$('addForm').onsubmit = (e) => {
+  e.preventDefault();
+  const url = $('urlInput').value.trim();
+  const label = $('labelInput').value.trim();
+  mutate((items) => [...items, {
+    id: crypto.randomUUID().slice(0, 8),
+    url,
+    label: label || undefined,
+    active: true,
+    addedAt: new Date().toISOString(),
+  }]).then(() => { $('urlInput').value = ''; $('labelInput').value = ''; });
+};
+
+showScreen();
+</script>
+</body>
+</html>
