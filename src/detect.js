@@ -83,3 +83,23 @@ export function shopifyAvailability(product) {
     price: typeof cents === 'number' ? (cents / 100).toFixed(2) : undefined,
   };
 }
+
+const NEGATIVE_SIGNALS = [
+  'sold out',
+  'sold-out',
+  'out of stock',
+  'out-of-stock',
+  'notify me when',
+  'email when available',
+  'back in stock soon',
+  'currently unavailable',
+];
+
+const POSITIVE_SIGNALS = ['add to cart', 'add to bag', 'add to basket', 'buy now', 'in stock'];
+
+export function textHeuristics(html) {
+  const text = html.toLowerCase();
+  if (NEGATIVE_SIGNALS.some((p) => text.includes(p))) return { status: OUT_OF_STOCK };
+  if (POSITIVE_SIGNALS.some((p) => text.includes(p))) return { status: IN_STOCK };
+  return null;
+}
