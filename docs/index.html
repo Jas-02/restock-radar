@@ -115,9 +115,18 @@ function render(items, state) {
     const status = s?.status ?? 'NEW';
     const li = document.createElement('li');
     li.className = item.active ? '' : 'paused';
-    const name = document.createElement('a');
-    name.href = item.url; name.target = '_blank'; name.rel = 'noopener';
-    name.textContent = item.label || new URL(item.url).hostname;
+    let parsedUrl = null;
+    try {
+      parsedUrl = new URL(item.url);
+    } catch {
+      // malformed stored URL: fall through to plain text below
+    }
+    const canLink = parsedUrl && (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:');
+    const name = document.createElement(canLink ? 'a' : 'span');
+    if (canLink) {
+      name.href = item.url; name.target = '_blank'; name.rel = 'noopener';
+    }
+    name.textContent = item.label || parsedUrl?.hostname || item.url;
     const badge = document.createElement('span');
     badge.className = `badge ${status}`;
     badge.textContent = item.active ? BADGES[status] : 'Paused';

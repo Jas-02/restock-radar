@@ -31,23 +31,27 @@ export async function checkItem(item, fetchFn = fetch) {
   }
   if (!res.ok) return { ok: false };
 
-  const html = await res.text();
-  let result = jsonLdAvailability(html);
+  try {
+    const html = await res.text();
+    let result = jsonLdAvailability(html);
 
-  if (!result && isShopifyPage(html)) {
-    const jsonUrl = shopifyProductJsonUrl(item.url);
-    if (jsonUrl) {
-      try {
-        const pRes = await fetchFn(jsonUrl, { headers: HEADERS, signal: AbortSignal.timeout(15000) });
-        if (pRes.ok) result = shopifyAvailability(await pRes.json());
-      } catch {
-        // fall through to text heuristics
+    if (!result && isShopifyPage(html)) {
+      const jsonUrl = shopifyProductJsonUrl(item.url);
+      if (jsonUrl) {
+        try {
+          const pRes = await fetchFn(jsonUrl, { headers: HEADERS, signal: AbortSignal.timeout(15000) });
+          if (pRes.ok) result = shopifyAvailability(await pRes.json());
+        } catch {
+          // fall through to text heuristics
+        }
       }
     }
-  }
 
-  if (!result) result = textHeuristics(html);
-  return { ok: true, status: result?.status ?? UNKNOWN, price: result?.price };
+    if (!result) result = textHeuristics(html);
+    return { ok: true, status: result?.status ?? UNKNOWN, price: result?.price };
+  } catch {
+    return { ok: false };
+  }
 }
 
 export async function run({

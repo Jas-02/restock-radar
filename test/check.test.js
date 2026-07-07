@@ -52,6 +52,16 @@ test('checkItem: Shopify fallback fetches the product .js', async () => {
   assert.deepEqual(calls, ['https://store.com/products/diver', 'https://store.com/products/diver.js']);
 });
 
+test('checkItem: body read failure → not ok', async () => {
+  const result = await checkItem({ url: 'https://x.com/p/1' }, async () => ({
+    ok: true,
+    status: 200,
+    text: async () => { throw new Error('aborted mid-body'); },
+    json: async () => ({}),
+  }));
+  assert.deepEqual(result, { ok: false });
+});
+
 test('checkItem: no signals at all → UNKNOWN', async () => {
   const result = await checkItem({ url: 'https://x.com/p/1' }, async () => htmlResponse('<h1>watch</h1>'));
   assert.deepEqual(result, { ok: true, status: 'UNKNOWN', price: undefined });

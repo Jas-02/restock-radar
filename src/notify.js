@@ -38,6 +38,9 @@ export function buildBlockedEmail(item) {
 }
 
 export async function sendEmail({ subject, text }, env = process.env) {
+  if (!env.GMAIL_USER || !env.GMAIL_APP_PASSWORD || !env.NOTIFY_TO) {
+    throw new Error('Missing email config: set GMAIL_USER, GMAIL_APP_PASSWORD and NOTIFY_TO');
+  }
   const transporter = nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,

@@ -14,6 +14,8 @@ them every ~10–20 minutes and emails when something comes back in stock.
 - Statuses: **In stock / Out of stock / Unknown / Can't monitor** (a site that
   blocks 3 checks in a row is marked Can't monitor and you get one heads-up
   email; Amazon/Flipkart often do this).
+- Alerts are at-least-once — in rare failure cases you may get a duplicate
+  email, but an alert is never silently lost.
 
 ## One-time setup
 

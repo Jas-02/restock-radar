@@ -24,3 +24,8 @@ test('blocked email explains the situation and links the product', () => {
   assert.match(text, /https:\/\/store\.com\/products\/diver/);
   assert.match(text, /manually/);
 });
+
+test('sendEmail rejects with a clear error when email env vars are missing', async () => {
+  const { sendEmail } = await import('../src/notify.js');
+  await assert.rejects(() => sendEmail({ subject: 's', text: 't' }, {}), /GMAIL_USER/);
+});
