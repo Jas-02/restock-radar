@@ -160,7 +160,8 @@ async function mutate(fn) {
     await saveWatchlist(fn(items), sha);
     await refresh();
     msg('Saved ✓');
-  } catch (err) { msg(err.message, true); }
+    return true;
+  } catch (err) { msg(err.message, true); return false; }
 }
 
 $('tokenForm').onsubmit = (e) => {
@@ -186,7 +187,7 @@ $('addForm').onsubmit = (e) => {
     label: label || undefined,
     active: true,
     addedAt: new Date().toISOString(),
-  }]).then(() => { $('urlInput').value = ''; $('labelInput').value = ''; });
+  }]).then((success) => { if (success) { $('urlInput').value = ''; $('labelInput').value = ''; } });
 };
 
 showScreen();
