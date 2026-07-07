@@ -32,7 +32,8 @@ One public repo, `Jas-02/restock-radar`, containing three cooperating parts:
 ```
 restock-radar/
 ├── docs/                       # GitHub Pages site (web app)
-│   └── index.html              # single-page app, plain HTML/CSS/JS
+│   ├── index.html              # single-page app, plain HTML/CSS/JS
+│   └── superpowers/specs/      # design docs (this file; public, that's fine)
 ├── data/
 │   ├── watchlist.json          # what to watch (written by web app)
 │   └── state.json              # last known status per item (written by checker)
