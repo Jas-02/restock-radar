@@ -59,3 +59,27 @@ function isProduct(node) {
     (t) => String(t).toLowerCase() === 'product'
   );
 }
+
+export function isShopifyPage(html) {
+  return /cdn\.shopify\.com|Shopify\.theme|shopify-digital-wallet/i.test(html);
+}
+
+export function shopifyProductJsonUrl(pageUrl) {
+  let u;
+  try {
+    u = new URL(pageUrl);
+  } catch {
+    return null;
+  }
+  const m = u.pathname.match(/^(.*\/products\/[^/]+?)\/?$/);
+  return m ? `${u.origin}${m[1]}.js` : null;
+}
+
+export function shopifyAvailability(product) {
+  if (typeof product?.available !== 'boolean') return null;
+  const cents = typeof product.price === 'number' ? product.price : product.variants?.[0]?.price;
+  return {
+    status: product.available ? IN_STOCK : OUT_OF_STOCK,
+    price: typeof cents === 'number' ? (cents / 100).toFixed(2) : undefined,
+  };
+}
